@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dungeon Quest</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .container {
+            background-color: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        h1 {
+            text-align: center;
+            color: #ffcc00;
+            margin-bottom: 30px;
+        }
+        .game-area {
+            min-height: 300px;
+            background-color: #1a1a1a;
+            padding: 15px;
+            border: 2px solid #444;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            white-space: pre-wrap;
+        }
+        .player-stats {
+            display: flex;
+            justify-content: space-between;
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #3a3a3a;
+            border-radius: 5px;
+        }
+        .stat {
+            text-align: center;
+        }
+        .stat-label {
+            font-weight: bold;
+            color: #ffcc00;
+        }
+        .input-area {
+            display: flex;
+            gap: 10px;
+        }
+        input[type="text"] {
+            flex: 1;
+            padding: 10px;
+            background-color: #3a3a3a;
+            border: 1px solid #555;
+            border-radius: 5px;
+            color: #e0e0e0;
+            font-family: inherit;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #ffcc00;
+            color: #1a1a1a;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #ffaa00;
+        }
+        button:disabled {
+            background-color: #666;
+            cursor: not-allowed;
+        }
+        .actions {
+            margin: 10px 0;
+        }
+        .action-btn {
+            margin: 2px;
+            padding: 5px 10px;
+            background-color: #444;
+            color: #e0e0e0;
+            border: 1px solid #666;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .action-btn:hover {
+            background-color: #555;
+        }
+        .error {
+            color: #ff6666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏰 Dungeon Quest 🗡️</h1>
+
+        <div class="player-stats" id="playerStats">
+            <div class="stat">
+                <div class="stat-label">HP</div>
+                <div id="hp">100/100</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Level</div>
+                <div id="level">1</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Experience</div>
+                <div id="experience">0</div>
+            </div>
+            <div class="stat">
+                <div class="stat-label">Items</div>
+                <div id="inventory">None</div>
+            </div>
+        </div>
+
+        <div class="game-area" id="gameArea">
+            Click "New Game" to begin your adventure...
+        </div>
+
+        <div class="actions" id="suggestedActions"></div>
+
+        <div class="input-area">
+            <input type="text" id="actionInput" placeholder="Enter your action (e.g., 'explore deeper', 'attack goblin')" disabled>
+            <button id="sendAction" onclick="sendAction()" disabled>Send</button>
+            <button id="newGame" onclick="startNewGame()">New Game</button>
+        </div>
+    </div>
+
+    <script>
+        let currentGameId = null;
+        const API_BASE = 'http://localhost:8000';
+
+        async function startNewGame() {
+            try {
+                document.getElementById('gameArea').textContent = 'Starting new adventure...';
+
+                const response = await fetch(`${API_BASE}/game/new`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ player_name: 'Adventurer' })
+                });
+
+                if (!response.ok) throw new Error('Failed to create game');
+
+                const data = await response.json();
+                currentGameId = data.game_id;
+
+                updateGameDisplay(data);
+
+                document.getElementById('actionInput').disabled = false;
+                document.getElementById('sendAction').disabled = false;
+                document.getElementById('actionInput').focus();
+
+            } catch (error) {
+                document.getElementById('gameArea').innerHTML = `<span class="error">Error: ${error.message}</span>`;
+            }
+        }
+
+        async function sendAction() {
+            const actionInput = document.getElementById('actionInput');
+            const action = actionInput.value.trim();
+
+            if (!action || !currentGameId) return;
+
+            try {
+                document.getElementById('sendAction').disabled = true;
+
+                const response = await fetch(`${API_BASE}/game/action`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        game_id: currentGameId,
+                        action: action
+                    })
+                });
+
+                if (!response.ok) throw new Error('Failed to send action');
+
+                const data = await response.json();
+                updateGameDisplay(data);
+
+                actionInput.value = '';
+
+            } catch (error) {
+                document.getElementById('gameArea').innerHTML += `\n<span class="error">Error: ${error.message}</span>`;
+            } finally {
+                document.getElementById('sendAction').disabled = false;
+                actionInput.focus();
+            }
+        }
+
+        function updateGameDisplay(data) {
+            // Update narrative
+            const gameArea = document.getElementById('gameArea');
+            gameArea.textContent = data.narrative;
+
+            // Update player stats
+            const player = data.player_state;
+            document.getElementById('hp').textContent = `${player.hp}/${player.max_hp}`;
+            document.getElementById('level').textContent = player.level;
+            document.getElementById('experience').textContent = player.experience;
+            document.getElementById('inventory').textContent = player.inventory.length > 0 ? player.inventory.join(', ') : 'None';
+
+            // Update suggested actions
+            const actionsDiv = document.getElementById('suggestedActions');
+            actionsDiv.innerHTML = '';
+            if (data.available_actions && data.available_actions.length > 0) {
+                actionsDiv.innerHTML = '<strong>Suggested actions:</strong> ';
+                data.available_actions.forEach(action => {
+                    const btn = document.createElement('button');
+                    btn.className = 'action-btn';
+                    btn.textContent = action;
+                    btn.onclick = () => {
+                        document.getElementById('actionInput').value = action;
+                        sendAction();
+                    };
+                    actionsDiv.appendChild(btn);
+                });
+            }
+
+            // Check game status
+            if (data.game_status === 'game_over') {
+                document.getElementById('actionInput').disabled = true;
+                document.getElementById('sendAction').disabled = true;
+                gameArea.innerHTML += '\n\n<span class="error">GAME OVER</span>';
+            }
+        }
+
+        // Allow Enter key to send action
+        document.getElementById('actionInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendAction();
+            }
+        });
+    </script>
+</body>
+</html>
